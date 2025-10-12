@@ -5,9 +5,9 @@ import threading
 
 from payments.utils import make_mpesa_stk
 
-STKPUSH_ROUTING_KEY = 'veribroke_mpesa_stk'
+STKPUSH_ROUTING_KEY = 'veribroke.mpesa-stk'
 EXCHANGE = 'io.opencrafts.veribroke'
-QUEUE = 'veribroke_mpesa_stk'
+QUEUE = 'veribroke.mpesa-stk'
 
 
 class PaymentListener(threading.Thread):
