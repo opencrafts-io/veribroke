@@ -1,144 +1,83 @@
-# 💸 Veribroke – OpenCrafts Payment Gateway
+# 💸 Veribroke Payment Service
 
-
-`veribroke` is the official Java-based payment gateway for **OpenCrafts Interactive**, built with Spring Boot 3 and powered by the **Spring Modulith** architecture. It facilitates **in-app payments**, **external client integrations**, and supports **webhooks/callbacks** for real-time payment event notifications.
-
----
-
-## 🚀 Features
-
-- 🧩 **Modular design** using [Spring Modulith](https://docs.spring.io/spring-modulith/docs/current/reference/html/)
-- 💸 Process internal app payments (subscriptions, top-ups, checkout flows)
-- 📡 Expose webhook endpoints for external clients (mobile/web apps)
-- 📈 Observability via Spring Actuator
-- 📚 Auto-generated REST Docs with Spring REST Docs and AsciiDoctor
-- ✅ Containerized testing support using **Testcontainers**
-- 🔍 Production-ready from day one
+The **Veribroke Payment Service** is responsible for managing all **payment operations** within the OpenCrafts ecosystem.  
+It acts as a **central payment hub**, processing and coordinating various payment methods through **RabbitMQ** for reliable, asynchronous communication between microservices.
 
 ---
 
-## 🛠️ Tech Stack
+## 🧩 System Overview
 
-| Tech             | Usage                          |
-|------------------|-------------------------------|
-| Java 21          | Primary language               |
-| Spring Boot 3.5  | Core framework                 |
-| Spring Modulith  | Modularity and lifecycle mgmt  |
-| JPA              | ORM for DB integration         |
-| Spring Actuator  | Metrics & health endpoints     |
-| Spring REST Docs | Auto API documentation         |
-| Testcontainers   | Integration tests              |
-| GraalVM Native   | Optional native image builds   |
+Veribroke is designed around a **queue-based architecture** using **RabbitMQ**.  
+Each payment method (e.g., M-Pesa STK, Card Payments, Airtel Money) is mapped to a specific **routing key** and **queue** under a common exchange.
+
+Other microservices publish payment requests to these queues, and Veribroke processes them asynchronously, then sends payment status updates or notifications to the respective services.
 
 ---
 
-## 🧪 Running Locally
+## 🕸️ Messaging Overview
 
-### Prerequisites
-
-- Java 21
-- Maven 3.8+
-- PostgreSQL 
-
-### 1. Clone the project
-
-```bash
-git clone https://github.com/opencrafts/veribroke.git
-cd veribroke
-```
-
-### 2. Configure DB
-
-Update `src/main/resources/application.properties`:
-
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/veribroke
-spring.datasource.username=youruser
-spring.datasource.password=yourpass
-spring.jpa.hibernate.ddl-auto=update
-```
-
-### 3. Run the app
-
-```bash
-./mvnw spring-boot:run
-```
-
-The app should be running at `http://localhost:8080`.
+| Component | Description |
+|------------|-------------|
+| **Exchange Name** | `io.opencrafts.veribroke` |
+| **Exchange Type** | `direct` |
+| **Content Type** | `application/json` |
+| **Purpose** | Serves as the message router for all payment-related requests across the OpenCrafts ecosystem. |
 
 ---
 
-## 📡 API Usage
+## 📦 Queues and Routing Keys
 
-Once running, you'll have endpoints like:
+| Payment Method | Queue Name | Routing Key | Description |
+|----------------|-------------|--------------|-------------|
+| **M-Pesa STK Push** | `veribroke.mpesa-stk` | `veribroke.mpesa-stk` | Handles M-Pesa STK push requests — triggers user payment prompts. |
+| **Card Payments** *(future)* | `veribroke.card-payment` | `veribroke.card-payment` | Handles card-based transactions via supported card APIs. |
+| **Airtel Money** *(future)* | `veribroke.airtel-money` | `veribroke.airtel-money` | Handles Airtel Money transactions and confirmations. |
+| **Bank Transfers** *(future)* | `veribroke.bank-transfer` | `veribroke.bank-transfer` | Handles direct bank payment integrations. |
 
-- `POST /api/payments` – Initiate a payment
-- `GET /api/payments/{id}` – Check payment status
-- `POST /api/webhooks/payment-status` – Receive callbacks from external services
-
-> ⚙️ API docs are auto-generated at build time under `target/generated-docs/`
-
-
-## ✅ Testing
-
-```bash
-./mvnw test
-```
-
-Includes:
-
-- ✅ Unit tests with JUnit 5
-- 🔁 Integration tests with Testcontainers (PostgreSQL)
-- 📄 REST Docs generation
+> 💡 **Note:**  
+> Each queue listens to messages published to the exchange `io.opencrafts.veribroke` using its respective routing key.
 
 ---
 
-## 📜 Building API Docs
+## ⚙️ Message Structure
 
-```bash
-./mvnw package
-# See: target/generated-docs/index.html
-```
+All messages must be published as **JSON objects** with the content type `application/json`.
 
----
+### Common Fields
 
-## 🧊 Native Build (Optional)
-
-If you're targeting a native runtime with GraalVM:
-
-```bash
-./mvnw -Pnative native:compile
-```
-
----
-
-## 🌍 Roadmap
-
-- [ ] In-app payments
-- [ ] External webhook support
-- [ ] Admin dashboard for client management
-- [ ] Integration with M-Pesa, Stripe, Flutterwave
-- [ ] Retry/Dead-letter mechanism for webhook failures
-- [ ] OAuth2 authentication for clients
+| Field | Type | Required | Description |
+|--------|------|-----------|-------------|
+| `request_id` | `string` | ✅ | Unique identifier for the request. |
+| `amount` | `number` | ✅ | Amount to be charged. |
+| `description` | `string` | ✅ | Payment purpose or reference. |
+| `callback_url` | `string` | ✅ | URL to receive payment result notifications. |
+| `target_user_id` | `string` | ✅ | Verisafe User Responsible For This Intiation |
+| `service_name` | `string` | ✅ | The Service Sending The Request |
+| `metadata` | `object` | ❌ | Optional custom fields for internal use. (Shall be stated) |
 
 ---
 
-## 💬 Contribution
+## 📲 Triggering an M-Pesa STK Push
 
-Open to contributors! PRs and issues welcome.
+To initiate an M-Pesa STK Push, publish a message to the exchange `io.opencrafts.veribroke` using the routing key `veribroke.mpesa-stk`.
 
-1. Fork the repo
-2. Create a feature branch
-3. Push and open a PR
+### Exchange & Queue
 
----
+| Property | Value |
+|-----------|--------|
+| **Exchange Name** | `io.opencrafts.veribroke` |
+| **Routing Key** | `veribroke.mpesa-stk` |
+| **Content Type** | `application/json` |
 
-## 🛡 License
+### Example Request Message
 
-**Proprietary** – OpenCrafts internal use. External licensing upon request.
-
----
-
-## 🧠 Maintainers
-
-- Baraka Mnjala Mbugua  – [@eiidoubleyuwes](https://github.com/eiidoubleyuwes)
+```json
+{
+  "request_id": "OR648724567",
+  "target_user_id": "f71a-2b57-4678-8776-9708c92d8dd1",
+  "phone_number": "2547xxxxx",
+  "amount": 800,
+  "service_name": "SHEREHE",
+  "description": "Sherehe Payment - Order #24567",
+  "callback_url": "https://api.opencrafts.io/payments/callback",
+}
