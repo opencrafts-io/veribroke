@@ -108,4 +108,11 @@ media/
 *.db
 *.pid
 
+# PostgreSQL
+*.sql
+*.dump
+
+# Docker
+docker-compose.override.yml
+
 # Ignore Django Migrations in Development if you are working on team
