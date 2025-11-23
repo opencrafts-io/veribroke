@@ -29,9 +29,10 @@ def make_mpesa_stk(body):
                 trans_status, trans_resp = mpesa_client.query_transaction_status(
                     resp_data['CheckoutRequestID'],
                 )
-                if trans_resp['ResultDesc'] == 'The transaction is still under processing':
-                    continue
+                
                 if trans_status == 200:
+                    if trans_resp['ResultDesc'] == 'The transaction is still under processing':
+                        continue
                     break
                 num_retries += 1
                 # avoid retrying forever
