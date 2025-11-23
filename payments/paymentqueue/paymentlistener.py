@@ -4,35 +4,42 @@ from retry import retry
 import threading
 
 from payments.utils import make_mpesa_stk
+from veribroke import settings
 
-STKPUSH_ROUTING_KEY = 'veribroke.mpesa-stk'
-EXCHANGE = 'io.opencrafts.veribroke'
-QUEUE = 'veribroke.mpesa-stk'
+# STKPUSH_ROUTING_KEY = 'veribroke.mpesa-stk'
 
 
 class PaymentListener(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
+        creds = pika.PlainCredentials(
+            settings.env("RABBITMQ_USER"),
+            settings.env("RABBITMQ_PASSWORD"),
+        )
         connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'),
+            pika.ConnectionParameters(
+                host=settings.env("RABBITMQ_HOST"),
+                port=settings.env("RABBITMQ_PORT"),
+                credentials=creds,
+            ),
         )
         self.channel = connection.channel()
         self.channel.exchange_declare(
-            exchange=EXCHANGE,
+            exchange=settings.env("RABBITMQ_EXCHANGE"),
             exchange_type='direct',
         )
         self.channel.queue_declare(
-            queue=QUEUE,
+            queue=settings.env("RABBITMQ_QUEUE"),
             durable=True,
         )
         self.channel.queue_bind(
-            queue=QUEUE,
-            exchange=EXCHANGE,
-            routing_key=STKPUSH_ROUTING_KEY,
+            queue=settings.env("RABBITMQ_QUEUE"),
+            exchange=settings.env("RABBITMQ_EXCHANGE"),
+            routing_key=settings.env("RABBITMQ_STKPUSH_ROUTING_KEY"),
         )
         self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(
-            queue=QUEUE,
+            queue=settings.env("RABBITMQ_QUEUE"),
             on_message_callback=self.callback,
         )
     
