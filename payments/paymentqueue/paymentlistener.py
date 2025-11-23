@@ -6,8 +6,6 @@ import threading
 from payments.utils import make_mpesa_stk
 from veribroke import settings
 
-# STKPUSH_ROUTING_KEY = 'veribroke.mpesa-stk'
-
 
 class PaymentListener(threading.Thread):
     def __init__(self):
@@ -19,7 +17,7 @@ class PaymentListener(threading.Thread):
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 host=settings.env("RABBITMQ_HOST"),
-                port=settings.env("RABBITMQ_PORT"),
+                port=settings.env.int("RABBITMQ_PORT"),
                 credentials=creds,
             ),
         )
@@ -57,12 +55,8 @@ class PaymentListener(threading.Thread):
         
         
     def callback(self, channel, method, properties, body):
-        print("And here")
         message = json.loads(body)
-        print(message)
-        returned = make_mpesa_stk(message)
-        print("from returning")
-        print(returned)
+        make_mpesa_stk(message)
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
     def run(self):
