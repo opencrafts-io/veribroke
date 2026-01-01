@@ -3,7 +3,8 @@ name: Build, Test, and Push Veribroke Backend (Prod or Dev)
 on:
   push:
     branches:
-      - '**'
+      - main
+      - staging
 
 jobs:
   build-and-push:
