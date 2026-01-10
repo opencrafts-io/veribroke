@@ -207,7 +207,7 @@ For MPESA, the following format is required:
   "type": "pochi",
   "amount": 500,
   "recipient": "254712345678",
-  "account-reference": null,
+  "account_reference": null,
   "occassion": "Commission payout"
 }
 ```
@@ -241,7 +241,7 @@ For MPESA, the following format is required:
 
 - If type is paybill:
 
-  - account-reference must be provided (cannot be omitted, but may be null if applicable)
+  - account_reference must be provided (cannot be omitted, but may be null if applicable)
 
 ### Example Metadata with Split Transaction
 ```json
@@ -253,7 +253,7 @@ For MPESA, the following format is required:
         "type": "paybill",
         "amount": 1000,
         "recipient": "123456",
-        "account-reference": "INV-2026-001",
+        "account_reference": "INV-2026-001",
         "occassion": "Service fee split"
       }
     }
