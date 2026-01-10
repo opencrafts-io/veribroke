@@ -83,6 +83,8 @@ class SplitTransactions(models.Model):
 
     statuses = (
         ("pending", "pending"),
+        ("processed", "proccessed"),
+        ("failedprocessing", "failedprocessing"),
         ("success", "success"),
         ("failure", "failure"),
     )
@@ -92,7 +94,7 @@ class SplitTransactions(models.Model):
         primary_key=True,
         editable=False,
     )
-    split_id = models.ForeignKey(
+    split_id = models.OneToOneField(
         Transactions,
         on_delete=models.DO_NOTHING,
         null=True,
@@ -102,6 +104,12 @@ class SplitTransactions(models.Model):
         max_digits=12,
         decimal_places=2,
         null=False,
+    )
+    trans_fee = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=False,
+        default=0.0,
     )
     originator = models.CharField(
         max_length=50,
@@ -131,10 +139,14 @@ class SplitTransactions(models.Model):
         null=True,
     )
     status = models.CharField(
-        max_length=9,
+        max_length=20,
         choices=statuses,
         default="pending",
         null=False,
+    )
+    occassion = models.TextField(null=False)
+    message = models.TextField(
+        null=True,
     )
     created = models.DateTimeField(auto_now_add=True, null=False)
     updated = models.DateTimeField(auto_now=True, null=False)

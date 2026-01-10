@@ -7,6 +7,8 @@ class StkPushSerializers(serializers.Serializer):
     Serializer for Messages from Backend
     """
     request_id = serializers.CharField(required=True)
+    target_user_id = serializers.CharField(required=True)
+    trans_desc = serializers.CharField(max_length=100, required=True)
     service_name = serializers.CharField(required=True)
     reply_to = serializers.CharField(required=True)
     phone_number = serializers.CharField(required=True)

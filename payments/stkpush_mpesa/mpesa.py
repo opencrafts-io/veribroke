@@ -171,7 +171,7 @@ class MpesaHandler:
         query_data = {
             "Initiator": settings.env("SAF_USERNAME"),
             "SecurityCredential":self.generate_password(),
-            "Command ID": command_id,
+            "CommandID": command_id,
             "SenderIdentifierType": "4",
             "RecieverIdentifierType":"4",
             "Amount": math.ceil(float(amount)),
@@ -180,7 +180,7 @@ class MpesaHandler:
             "AccountReference": account_reference,
             "Requester": requester,
             "Remarks": remarks,
-            "QueueTimeOutURL":"http://0.0.0.0:0000/ResultsListener.php",
+            "QueueTimeOutURL":"https://mydomain.com/path",
             "ResultURL": settings.env("SAF_B2B_RESULT_URL"),
         }
 
