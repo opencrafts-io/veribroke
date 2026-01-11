@@ -4,6 +4,7 @@ import base64
 import requests
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
+from uuid import uuid4
 from veribroke import settings
 
 
@@ -87,7 +88,7 @@ class MpesaHandler:
             "PartyB": self.shortcode,
             "PhoneNumber": phone_number,
             "CallBackURL": self.my_callback_url,
-            "AccountReference": "OPEN CRAFTS",
+            "AccountReference": payload['account_reference'],
             # TODO make this dynamic
             "TransactionDesc": "Client Deposit",
         }
@@ -112,6 +113,79 @@ class MpesaHandler:
 
         response = requests.post(
             self.query_status_url,
+            json=query_data,
+            headers=self.headers
+        )
+        
+        response_data = response.json()
+        
+        return response.status_code, response_data
+    
+    def send_to_user(self, is_pochi, amount, recipient, remarks, occasion):
+        """
+        Docstring for send_to_user
+        
+        :param self: Description
+        """
+        command_id = "BusinessPayToPochi" if is_pochi else "BusinessPayment"
+        query_data = { 
+            "OriginatorConversationID": str(uuid4()), 
+            "InitiatorName": settings.env("SAF_USERNAME"), 
+            "SecurityCredential": self.generate_password(),
+            "CommandID": command_id, 
+            "Amount": math.ceil(float(amount)), 
+            "PartyA": self.shortcode, 
+            "PartyB": recipient,
+            "Remarks": remarks, 
+            "QueueTimeOutURL": "https://mydomain.com/path", 
+            "ResultURL": settings.env("SAF_B2C_RESULT_URL"),
+            "Occassion": occasion 
+        }
+
+        request_url = settings.env("SAF_POCHI_URL") if is_pochi\
+            else settings.env("SAF_B2C_URL")
+        
+        response = requests.post(
+            request_url,
+            json=query_data,
+            headers=self.headers
+        )
+        
+        response_data = response.json()
+        
+        return response.status_code, response_data
+    
+    def send_to_business(
+            self,
+            is_paybill,
+            amount,
+            recipient,
+            remarks,
+            requester,
+            account_reference=None,
+        ):
+        """
+        Docstring for send_to_paybill
+        """
+        command_id = "BusinessPayBill" if is_paybill else "BusinessBuyGoods"
+        query_data = {
+            "Initiator": settings.env("SAF_USERNAME"),
+            "SecurityCredential":self.generate_password(),
+            "CommandID": command_id,
+            "SenderIdentifierType": "4",
+            "RecieverIdentifierType":"4",
+            "Amount": math.ceil(float(amount)),
+            "PartyA": self.shortcode,
+            "PartyB": recipient,
+            "AccountReference": account_reference,
+            "Requester": requester,
+            "Remarks": remarks,
+            "QueueTimeOutURL":"https://mydomain.com/path",
+            "ResultURL": settings.env("SAF_B2B_RESULT_URL"),
+        }
+
+        response = requests.post(
+            "https://sandbox.safaricom.co.ke/mpesa/b2b/v1/paymentrequest",
             json=query_data,
             headers=self.headers
         )
