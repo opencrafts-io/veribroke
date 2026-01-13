@@ -1,16 +1,17 @@
-name: Build, Test, and Push Veribroke Backend (Prod or Dev)
+name: Build, Push, and Update Veribroke Backend
 
 on:
   push:
     branches:
-      - main
+      - master
       - staging
 
 jobs:
-  build-and-push:
+  build-push-update:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Veribroke Repo
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -38,7 +39,7 @@ jobs:
           BRANCH=$(echo "${GITHUB_REF##*/}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')
           SHA=$(git rev-parse --short HEAD)
 
-          if [ "$BRANCH" = "main" ]; then
+          if [ "$BRANCH" = "master" ]; then
             IMAGE_TAG="prod"
             IMAGE_BASE="${{ secrets.DOCKERHUB_USERNAME }}/veribroke-backend-prod"
           else
@@ -53,7 +54,7 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build Docker image with Buildpacks
+      - name: Build veribroke Image with Buildpacks
         run: |
           IMAGE_BASE=${{ steps.tags.outputs.image_base }}
           IMAGE_TAG=${{ steps.tags.outputs.image_tag }}
@@ -68,14 +69,74 @@ jobs:
 
           docker tag "$IMAGE_BASE:$IMAGE_TAG" "$IMAGE_BASE:$SHA_TAG"
 
-      - name: Push Docker images to Docker Hub
+      - name: Push veribroke Images
         run: |
           IMAGE_BASE=${{ steps.tags.outputs.image_base }}
           IMAGE_TAG=${{ steps.tags.outputs.image_tag }}
           SHA_TAG=${{ steps.tags.outputs.sha_tag }}
 
-          echo "🚀 Pushing $IMAGE_BASE:$IMAGE_TAG"
+          echo "Pushing $IMAGE_BASE:$IMAGE_TAG"
           docker push "$IMAGE_BASE:$IMAGE_TAG"
 
-          echo "🚀 Pushing $IMAGE_BASE:$SHA_TAG"
+          echo "Pushing $IMAGE_BASE:$SHA_TAG"
           docker push "$IMAGE_BASE:$SHA_TAG"
+
+      - name: Checkout InfraOps Repo
+        uses: actions/checkout@v4
+        with:
+          repository: opencrafts-io/infraops
+          token: ${{ secrets.GH_TOKEN }}
+          ref: main
+          path: infraops
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Compute deployment file path
+        id: target
+        run: |
+          BRANCH="${GITHUB_REF_NAME#refs/heads/}"
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+            FILE="infraops/services/veribroke/deployment.yaml"
+          else
+            FILE="infraops/qaservices/veribroke/deployment.yaml"
+          fi
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "Deployment file: $FILE"
+
+      - name: Update deployment.yaml
+        run: |
+          FILE="${{ steps.target.outputs.file }}"
+          IMAGE="${{ steps.tags.outputs.image_base }}:${{ steps.tags.outputs.sha_tag }}"
+          echo "Updating $FILE with image: $IMAGE"
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: $FILE does not exist!"
+            ls -la "$(dirname $FILE)"
+            exit 1
+          fi
+          echo "Old image:"
+          yq eval '.spec.template.spec.containers[0].image' "$FILE"
+          yq eval ".spec.template.spec.containers[0].image = \"$IMAGE\"" -i "$FILE"
+          echo "New image:"
+          yq eval '.spec.template.spec.containers[0].image' "$FILE"
+
+      - name: Commit and push changes
+        run: |
+          cd infraops
+          IMAGE="${{ steps.tags.outputs.image_base }}:${{ steps.tags.outputs.sha_tag }}"
+          git config user.name "CI Bot from Github Actions"
+          git config user.email "actions@github.com"
+          
+          if [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
+            FILE="services/veribroke/deployment.yaml"
+          else
+            FILE="qaservices/veribroke/deployment.yaml"
+          fi
+          
+          git add "$FILE"
+          git commit -m "chore: update veribroke image to $IMAGE (${{ github.ref_name }})"
+          git push origin main
