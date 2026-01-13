@@ -3,7 +3,7 @@ name: Build, Push, and Update Veribroke Backend
 on:
   push:
     branches:
-      - master
+      - main
       - staging
 
 jobs:
