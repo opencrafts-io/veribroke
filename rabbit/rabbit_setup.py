@@ -26,11 +26,13 @@ class RabbitSetup():
         # direct exchange
         self.channel.exchange_declare(
             exchange=settings.env("RABBITMQ_EXCHANGE"),
+            durable=True,
             exchange_type='direct',
         )
         # notifications exchange
         self.channel.exchange_declare(
             exchange=settings.env("RABBITMQ_NOTIFICATION_EXCHANGE"),
+             durable=True,
             exchange_type='topic',
         )
     
