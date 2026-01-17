@@ -39,7 +39,7 @@ jobs:
           BRANCH=$(echo "${GITHUB_REF##*/}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')
           SHA=$(git rev-parse --short HEAD)
 
-          if [ "$BRANCH" = "master" ]; then
+          if [ "$BRANCH" = "main" ]; then
             IMAGE_TAG="prod"
             IMAGE_BASE="${{ secrets.DOCKERHUB_USERNAME }}/veribroke-backend-prod"
           else
