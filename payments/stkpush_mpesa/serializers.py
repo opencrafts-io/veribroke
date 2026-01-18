@@ -41,7 +41,6 @@ class ExtrasSerializer(serializers.Serializer):
         required=True
     )
     recipient = serializers.CharField(max_length=50)
-    account_reference = serializers.CharField(max_length=100, required=False)
     occassion = serializers.CharField(max_length=100)
 
 
