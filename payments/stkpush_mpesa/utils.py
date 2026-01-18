@@ -50,8 +50,7 @@ def make_mpesa_stk(body):
                     return False, "invalid type for mpesa stk split",\
                         split_serializer.errors, {}
                 
-                account_reference = split_serializer.validated_data\
-                        ["extras"]["account_reference"]
+                account_reference = split_data["extras"].get("account_reference")
                 
                 if split_trans_type == "paybill" and not account_reference:
                     return False, "missing account reference for paybill",\
