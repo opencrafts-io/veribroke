@@ -11,6 +11,7 @@ from veribroke import settings
 class MpesaHandler:
     now = None
     shortcode = None
+    tillnumber = None
     consumer_key = None
     consumer_secret = None
     access_token_url = None
@@ -26,6 +27,7 @@ class MpesaHandler:
         self.now = datetime.now()
         
         self.shortcode = settings.env("SAF_SHORTCODE")
+        self.tillnumber = settings.env("SAF_TILL_NUMBER")
         self.consumer_key = settings.env("SAF_CONSUMER_KEY")
         self.consumer_secret = settings.env("SAF_CONSUMER_SECRET")
         self.access_token_url = settings.env("SAF_ACCESS_TOKEN_API")
@@ -82,10 +84,10 @@ class MpesaHandler:
             "BusinessShortCode": self.shortcode,
             "Password": self.password,
             "Timestamp": self.timestamp,
-            "TransactionType": "CustomerPayBillOnline",
+            "TransactionType": "CustomerBuyGoodsOnline",
             "Amount": math.ceil(float(amount)),
             "PartyA": phone_number,
-            "PartyB": self.shortcode,
+            "PartyB": self.tillnumber,
             "PhoneNumber": phone_number,
             "CallBackURL": self.my_callback_url,
             "AccountReference": payload['account_reference'],
@@ -138,7 +140,7 @@ class MpesaHandler:
             "PartyB": recipient,
             "Remarks": remarks, 
             "QueueTimeOutURL": "https://mydomain.com/path", 
-            "ResultURL": settings.env("SAF_B2C_RESULT_URL"),
+            "ResultURL": settings.env("SAF_B2C_URL"),
             "Occassion": occasion 
         }
 
