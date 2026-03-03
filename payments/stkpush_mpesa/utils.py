@@ -52,7 +52,7 @@ def make_mpesa_stk(body):
                 
                 account_reference = split_data["extras"].get("account_reference")
                 
-                if split_trans_type == "paybill" and not account_reference:
+                if split_trans_type == "paybill" and not account_reference :
                     return False, "missing account reference for paybill",\
                         None, {}
 
