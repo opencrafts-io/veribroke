@@ -14,7 +14,7 @@ Other microservices publish payment requests to these queues, and Veribroke proc
 
 ---
 
-## 🕸️ Messaging Overview
+## 🕸️ Messaging Overview.
 
 | Component | Description |
 |------------|-------------|
