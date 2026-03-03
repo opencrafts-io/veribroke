@@ -6,9 +6,9 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import SERVICE_NAME
 
 def post_fork(server, worker):
-    resource = SERVICE_NAME("veribroke")
+    resource = SERVICE_NAME("veribroke-staging")
     provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"))
+    exporter = OTLPSpanExporter(endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.default.svc.cluster.local:4318"))
     processor = BatchSpanProcessor(exporter)
     provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
