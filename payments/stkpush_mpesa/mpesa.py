@@ -183,7 +183,7 @@ class MpesaHandler:
             "Requester": requester,
             "Remarks": remarks,
             "QueueTimeOutURL":"https://mydomain.com/path",
-            "ResultURL": settings.env("SAF_B2B_RESULT_URL"),
+            "ResultURL": settings.env("SAF_B2B_URL"),
         }
 
         response = requests.post(
