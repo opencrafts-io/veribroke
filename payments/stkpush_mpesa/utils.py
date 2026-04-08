@@ -30,6 +30,7 @@ def make_mpesa_stk(body):
             trans.reply_to = serializer.validated_data['reply_to']
             trans.trans_desc = serializer.validated_data['trans_desc']
             trans.created = timezone.now()
+            trans.save()
 
             split_data = body.get("split_data")
 
