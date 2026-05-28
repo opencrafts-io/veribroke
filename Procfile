@@ -1,1 +1,1 @@
-web: sh -c "python manage.py migrate && (python manage.py start_payment_listener &) && gunicorn -c gunicorn.conf.py --workers 1 --bind 0.0.0.0:8111 veribroke.wsgi:application --access-logfile - --error-logfile -"
+web: sh -c "python manage.py migrate && PYTHONUNBUFFERED=1 python manage.py start_payment_listener >> /proc/1/fd/1 2>> /proc/1/fd/2 & exec gunicorn -c gunicorn.conf.py --workers 1 --bind 0.0.0.0:8111 --capture-output --access-logfile - --error-logfile - veribroke.wsgi:application"
