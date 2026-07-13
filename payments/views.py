@@ -10,19 +10,25 @@ from rest_framework import status
 from veribroke import settings
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TestAPIView(APIView):
     def post(self, request, *args, **kwargs):
         """
         Docstring for post
-        
+
         :param self: Description
         :param request: Description
         :param args: Description
         :param kwargs: Description
         """
-        print(request.body)
+        logger.debug(
+            "test endpoint hit",
+            extra={"body": request.body.decode("utf-8", errors="replace")},
+        )
         return Response(
             {"message": "Success got it"},
             status=status.HTTP_200_OK
@@ -34,22 +40,29 @@ class StkPushCallBack(APIView):
         """
         will be receive notifications from safaricom for a certain callback
         """
-        print("recieved mpesa call back")
-        print(request.data)
+        logger.debug("received mpesa stk callback", extra={"raw_body": request.data})
+
         checkout_id = request.data["Body"]["stkCallback"]["CheckoutRequestID"]
         result_code = request.data["Body"]["stkCallback"]["ResultCode"]
         result_desc = request.data["Body"]["stkCallback"]["ResultDesc"]
 
+        logger.info(
+            "processing stk callback",
+            extra={"checkout_id": checkout_id, "result_code": result_code},
+        )
+
         with transaction.atomic():
             trans = Transactions.objects.filter(reference_id=checkout_id).first()
             if not trans:
-                # TODO how to handle this
-                # received callback for transaction not recorded in db, log this
+                logger.warning(
+                    "stk callback received for unknown transaction",
+                    extra={"checkout_id": checkout_id, "result_code": result_code},
+                )
                 return Response(
                     {"message": "transaction not found"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             trans.message = result_desc
 
             if result_code == 0:
@@ -61,6 +74,15 @@ class StkPushCallBack(APIView):
                 trans.status = "failure"
             
             trans.save()
+
+            logger.info(
+                "stk callback processed",
+                extra={
+                    "request_id": trans.request_id,
+                    "checkout_id": checkout_id,
+                    "status": trans.status,
+                },
+            )
 
             if trans.split and result_code == 0:
                 split_trans = SplitTransactions.objects.get(
@@ -103,7 +125,6 @@ class StkPushCallBack(APIView):
                         account_reference=split_trans.account_reference,
                         requester=split_trans.recipient,
                     )
-                # print(resp_code, resp_data)
                 if resp_code == 200 and str(resp_data["ResponseCode"]) == "0":
                     split_trans.status = "processed"
                     split_trans.reference_id = resp_data["OriginatorConversationID"]
@@ -113,7 +134,17 @@ class StkPushCallBack(APIView):
                         split_trans.message = resp_data.get("errorMessage")
                     elif resp_data.get("ResponseDescription"):
                         split_trans.message = resp_data.get("ResponseDescription")
-                
+
+                logger.info(
+                    "split disbursement dispatched",
+                    extra={
+                        "request_id": trans.request_id,
+                        "split_trans_type": split_trans_type,
+                        "resp_code": resp_code,
+                        "status": split_trans.status,
+                    },
+                )
+
                 split_trans.save()
         
         rabbit = RabbitSetup()
@@ -147,23 +178,38 @@ class SplitTransCallBack(APIView):
         """
         receive notifications from safaricom for callbacks for split transactions
         """
+        logger.debug("received split callback", extra={"raw_body": request.data})
+
         identification = request.data["Result"]["OriginatorConversationID"]
         result_code = request.data["Result"]["ResultCode"]
         result_desc = request.data["Result"]["ResultDesc"]
         transaction_code = request.data["Result"]["TransactionID"]
+
+        logger.info(
+            "processing split callback",
+            extra={
+                "originator_conversation_id": identification,
+                "result_code": result_code,
+            },
+        )
 
         split_trans = SplitTransactions.objects.filter(
             reference_id=identification,
         ).first()
 
         if not split_trans:
-            # TODO how to handle this
-            # received callback for transaction not recorded in db, log this
+            logger.warning(
+                "split callback received for unknown transaction",
+                extra={
+                    "originator_conversation_id": identification,
+                    "result_code": result_code,
+                },
+            )
             return Response(
                 {"message": "transaction not found"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         split_trans.trans_code = transaction_code
         split_trans.message = result_desc
 
@@ -180,10 +226,19 @@ class SplitTransCallBack(APIView):
             split_trans.trans_fee = trans_fee
         else:
             split_trans.status = "failure"
-        
+
         split_trans.save()
-        
+
+        logger.info(
+            "split callback processed",
+            extra={
+                "split_trans_id": str(split_trans.trans_id),
+                "status": split_trans.status,
+                "result_code": result_code,
+            },
+        )
+
         return Response(
             {"message": "received successfully"},
             status=status.HTTP_200_OK,
-        )        
+        )

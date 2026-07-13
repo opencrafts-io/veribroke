@@ -119,7 +119,10 @@ class ConsumerListener(threading.Thread):
             self.channel.start_consuming()
         # Don't recover connections closed by server
         except pika.exceptions.ConnectionClosedByBroker:
-            logger.warning("Connection closed by broker for %s", self.queue_name)
+            logger.warning(
+                "connection closed by broker",
+                extra={"queue_name": self.queue_name},
+            )
 
     def _delivery_attempts(self, headers: Optional[dict[str, Any]]) -> int:
         """
@@ -182,8 +185,11 @@ class ConsumerListener(threading.Thread):
             # Unretryable: the bytes won't parse any differently next
             # time, so skip straight to the failed queue.
             logger.error(
-                "Unparseable message on %s, sending to failed queue",
-                self.queue_name,
+                "unparseable message, sending to failed queue",
+                extra={
+                    "queue_name": self.queue_name,
+                    "failed_queue": self.failed_queue_name,
+                },
             )
             self._send_to_failed(body, headers)
             channel.basic_ack(delivery_tag=method.delivery_tag)
@@ -197,10 +203,12 @@ class ConsumerListener(threading.Thread):
         except Exception:
             attempt = self._delivery_attempts(headers) + 1
             logger.exception(
-                "Unhandled error processing %s on %s (attempt %s)",
-                request_id,
-                self.queue_name,
-                attempt,
+                "unhandled error processing message",
+                extra={
+                    "request_id": request_id,
+                    "queue_name": self.queue_name,
+                    "attempt": attempt,
+                },
             )
             if attempt >= MAX_DELIVERY_ATTEMPTS:
                 self._send_to_failed(body, headers)
@@ -220,11 +228,13 @@ class ConsumerListener(threading.Thread):
             return
 
         logger.info(
-            "Processed %s on %s: success=%s message=%s",
-            request_id,
-            self.queue_name,
-            success,
-            message,
+            "message processed",
+            extra={
+                "request_id": request_id,
+                "queue_name": self.queue_name,
+                "success": success,
+                "result_message": message,
+            },
         )
 
         if not success:
@@ -233,5 +243,5 @@ class ConsumerListener(threading.Thread):
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
     def run(self) -> None:
-        logger.info("Started listener for: %s", self.queue_name)
+        logger.info("started listener", extra={"queue_name": self.queue_name})
         self.__start_con()

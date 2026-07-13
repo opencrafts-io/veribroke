@@ -40,6 +40,16 @@ correspondingly higher reliability bar than a typical internal service —
 see `docs/adrs/` for the engineering decisions behind that, and
 `docs/incidents/` for the incident history that's shaped them.
 
+## Debugging in production
+
+Veribroke logs structured JSON lines (one JSON object per log entry) to
+stdout rather than free-text messages, so a transaction can be traced
+through its lifecycle — request received, STK push sent, Safaricom's
+response, callback processed, notification sent — by filtering on fields
+like `request_id`, `checkout_id`, or `queue_name` in whatever log
+aggregator ingests the container's stdout, instead of grepping for
+substrings.
+
 ## Integrating with Veribroke
 
 The full protocol reference — exchanges, queues, message schema,

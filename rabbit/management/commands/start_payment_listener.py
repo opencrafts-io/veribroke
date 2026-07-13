@@ -6,6 +6,10 @@ from rabbit.rabbit_setup import RabbitSetup
 
 from typing import Any, Optional
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class Command(BaseCommand):
     help = "Start all registered RabbitMQ consumers"
@@ -27,7 +31,8 @@ class Command(BaseCommand):
 
        for consumer in ConsumerListener.Consumers.values():
            consumer.start()
-       
-       print("wiiih")
-        
- 
+
+       logger.info(
+           "all rabbitmq consumers started",
+           extra={"queues": list(ConsumerListener.Consumers.keys())},
+       )
