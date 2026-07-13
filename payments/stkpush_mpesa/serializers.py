@@ -25,16 +25,20 @@ class StkPushSerializers(serializers.Serializer):
 
     def validate_phone_number(self, value):
         """
-        Returns True if the phone_number matches valid Kenyan formats,
-        otherwise returns False.
+        Accepts +254/254/0/bare-prefixed Kenyan numbers, but always
+        returns the canonical 254XXXXXXXXX form Daraja actually accepts
+        -- Safaricom rejects other shapes (e.g. a leading '+') outright,
+        and Veribroke previously passed whatever shape it received
+        straight through unchanged.
         """
         raw_number = value.strip()
 
         pattern = r"^(?:\+254|254|0)?((?:7|1)\d{8})$"
 
-        if not bool(re.match(pattern, raw_number)):
+        match = re.match(pattern, raw_number)
+        if not match:
             raise serializers.ValidationError("Invalid Phone Number")
-        return value
+        return f"254{match.group(1)}"
 
 class ExtrasSerializer(serializers.Serializer):
     type = serializers.CharField(max_length=50)

@@ -4,6 +4,7 @@ from django.test import TestCase
 
 from payments.models import SplitTransactions
 from payments.models import Transactions
+from payments.stkpush_mpesa.serializers import StkPushSerializers
 from payments.stkpush_mpesa.utils import make_mpesa_stk
 
 
@@ -176,3 +177,61 @@ class MakeMpesaStkTargetUserIdOptionalTests(TestCase):
         self.assertTrue(success, msg=f"expected success, got errors={errors}")
         trans = Transactions.objects.get(pk="req-with-user-id")
         self.assertEqual(trans.target_user_id, "user-1")
+
+
+class PhoneNumberNormalizationTests(TestCase):
+    """
+    Daraja only accepts phone numbers as 254XXXXXXXXX (no '+', no
+    leading 0). Veribroke's own validation accepted +254/254/0/bare
+    formats but passed them through unchanged, so anything other than
+    bare 254XXXXXXXXX got silently rejected by Safaricom with no DB
+    record (confirmed against the live API: '+254110877322' -> 400
+    Invalid PhoneNumber, '254110877322' -> 200 accepted).
+    """
+
+    def _validate(self, raw_number):
+        serializer = StkPushSerializers(data={
+            "request_id": "phone-fmt-test",
+            "trans_desc": "test",
+            "service_name": "TESTSVC",
+            "reply_to": "test.reply",
+            "phone_number": raw_number,
+            "trans_amount": "1",
+        })
+        self.assertTrue(serializer.is_valid(), msg=serializer.errors)
+        return serializer.validated_data["phone_number"]
+
+    def test_plus_254_prefix_is_normalized(self):
+        self.assertEqual(self._validate("+254110877322"), "254110877322")
+
+    def test_254_prefix_is_left_as_canonical(self):
+        self.assertEqual(self._validate("254110877322"), "254110877322")
+
+    def test_leading_zero_is_normalized(self):
+        self.assertEqual(self._validate("0110877322"), "254110877322")
+
+    def test_bare_local_number_is_normalized(self):
+        self.assertEqual(self._validate("110877322"), "254110877322")
+
+    @patch("payments.stkpush_mpesa.utils.MpesaHandler")
+    def test_make_mpesa_stk_sends_normalized_number_to_daraja(self, mock_handler_cls):
+        mock_handler = MagicMock()
+        mock_handler.make_stk_push.return_value = (
+            200,
+            {"CheckoutRequestID": "ws_CO_normalized"},
+        )
+        mock_handler_cls.return_value = mock_handler
+
+        body = _split_payload("req-phone-normalized")
+        body.pop("split_data")
+        body["phone_number"] = "+254110877322"
+
+        success, message, errors, data = make_mpesa_stk(body)
+
+        self.assertTrue(success, msg=f"expected success, got errors={errors}")
+        sent_payload = mock_handler.make_stk_push.call_args.args[0]
+        self.assertEqual(sent_payload["phone_number"], "254110877322")
+        self.assertEqual(
+            Transactions.objects.get(pk="req-phone-normalized").sender,
+            "254110877322",
+        )

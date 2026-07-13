@@ -56,6 +56,7 @@ All messages must be published as JSON objects with the content type
 | `trans_amount` | `number` | Yes | Amount to be charged. |
 | `trans_desc` | `string` | Yes | Payment purpose or reference. |
 | `reply_to` | `string` | Yes | Routing key to receive payment result notifications. |
+| `phone_number` | `string` | Yes | Payer's phone number. Accepts `2547XXXXXXXX`, `+2547XXXXXXXX`, `07XXXXXXXX`, or bare `7XXXXXXXX` (same for the `1XXXXXXXX` Safaricom range) — Veribroke normalizes it to Daraja's canonical `2547XXXXXXXX` form before sending it upstream. |
 | `target_user_id` | `string` | No (deprecated) | See [target_user_id is deprecated](#target_user_id-is-deprecated) below. |
 | `service_name` | `string` | Yes | The service sending the request. |
 | `metadata` | `object` | No | Optional custom fields for internal use, opaque to Veribroke and echoed back verbatim in notifications. |
