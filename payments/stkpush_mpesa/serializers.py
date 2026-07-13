@@ -7,7 +7,11 @@ class StkPushSerializers(serializers.Serializer):
     Serializer for Messages from Backend
     """
     request_id = serializers.CharField(required=True)
-    target_user_id = serializers.CharField(required=True)
+    # Not read anywhere in Veribroke's own processing -- purely a
+    # caller-owned reference, historically the Verisafe user id but
+    # never enforced to be one. Optional so callers outside that
+    # ecosystem aren't forced to fabricate a value. See ADR 0003.
+    target_user_id = serializers.CharField(required=False, allow_blank=True)
     trans_desc = serializers.CharField(max_length=100, required=True)
     service_name = serializers.CharField(required=True)
     reply_to = serializers.CharField(required=True)

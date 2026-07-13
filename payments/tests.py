@@ -129,3 +129,50 @@ class MakeMpesaStkSplitTransactionTests(TestCase):
         self.assertFalse(trans.split)
         self.assertEqual(trans.reference_id, "ws_CO_3")
         self.assertFalse(SplitTransactions.objects.filter(split_id="req-non-split").exists())
+
+
+class MakeMpesaStkTargetUserIdOptionalTests(TestCase):
+    """
+    target_user_id is never read by Veribroke's own logic -- it's
+    caller-owned bookkeeping. It must stay optional so callers outside
+    the original Verisafe-based ecosystem aren't forced to supply one,
+    while requests that still send it (existing clients) keep working
+    unchanged.
+    """
+
+    @patch("payments.stkpush_mpesa.utils.MpesaHandler")
+    def test_request_without_target_user_id_succeeds(self, mock_handler_cls):
+        mock_handler = MagicMock()
+        mock_handler.make_stk_push.return_value = (
+            200,
+            {"CheckoutRequestID": "ws_CO_no_user"},
+        )
+        mock_handler_cls.return_value = mock_handler
+
+        body = _split_payload("req-no-user-id")
+        body.pop("split_data")
+        body.pop("target_user_id")
+
+        success, message, errors, data = make_mpesa_stk(body)
+
+        self.assertTrue(success, msg=f"expected success, got errors={errors}")
+        trans = Transactions.objects.get(pk="req-no-user-id")
+        self.assertIn(trans.target_user_id, (None, ""))
+
+    @patch("payments.stkpush_mpesa.utils.MpesaHandler")
+    def test_request_with_target_user_id_still_persists_it(self, mock_handler_cls):
+        mock_handler = MagicMock()
+        mock_handler.make_stk_push.return_value = (
+            200,
+            {"CheckoutRequestID": "ws_CO_with_user"},
+        )
+        mock_handler_cls.return_value = mock_handler
+
+        body = _split_payload("req-with-user-id")
+        body.pop("split_data")
+
+        success, message, errors, data = make_mpesa_stk(body)
+
+        self.assertTrue(success, msg=f"expected success, got errors={errors}")
+        trans = Transactions.objects.get(pk="req-with-user-id")
+        self.assertEqual(trans.target_user_id, "user-1")

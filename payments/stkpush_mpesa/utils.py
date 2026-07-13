@@ -22,7 +22,7 @@ def make_mpesa_stk(body):
         with transaction.atomic():
             trans = Transactions()
             trans.request_id = serializer.validated_data['request_id']
-            trans.target_user_id = serializer.validated_data['target_user_id']
+            trans.target_user_id = serializer.validated_data.get('target_user_id')
             trans.trans_amount = serializer.validated_data['trans_amount']
             trans.sender = serializer.validated_data['phone_number']
             trans.trans_type = "MPESASTKPUSH"
