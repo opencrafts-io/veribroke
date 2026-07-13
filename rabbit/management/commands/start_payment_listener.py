@@ -4,11 +4,13 @@ from payments.stkpush_mpesa.utils import make_mpesa_stk
 from rabbit.consumers import ConsumerListener
 from rabbit.rabbit_setup import RabbitSetup
 
+from typing import Any, Optional
+
 
 class Command(BaseCommand):
     help = "Start all registered RabbitMQ consumers"
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Optional[str]:
        # setup rabbit
        rabbit = RabbitSetup()
        rabbit.declare_default_exchanges()

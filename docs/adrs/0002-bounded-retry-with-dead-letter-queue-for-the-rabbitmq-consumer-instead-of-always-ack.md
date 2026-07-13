@@ -33,52 +33,62 @@ is a direct reliability risk, not just a code-quality issue.
 
 Give unhandled exceptions from `cons_func` a **bounded, visible retry with
 backoff**, while leaving the existing business-logic-failure behavior
-(ack + notify `reply_to`) unchanged:
+(ack + notify `reply_to`) unchanged, using RabbitMQ's native
+dead-lettering rather than reinventing it in application code:
 
-- On an unhandled exception, if the message has been attempted fewer than
-  `MAX_DELIVERY_ATTEMPTS` (3) times, republish it to a new
-  `<queue>.retry` queue and ack the original off the main queue. The
-  retry queue has `x-message-ttl` (30s) and
+- The main queue (`veribroke.mpesa-stk`) now declares
+  `x-dead-letter-exchange`/`x-dead-letter-routing-key` pointing at a new
+  `<queue>.retry` binding on the *existing* exchange. On an unhandled
+  exception, if the message has been attempted fewer than
+  `MAX_DELIVERY_ATTEMPTS` (3) times (per RabbitMQ's own `x-death` header
+  count), the consumer just calls `channel.basic_nack(requeue=False)` —
+  RabbitMQ handles moving it to the retry queue itself, no manual
+  republish or attempt-tracking header needed.
+- The retry queue has `x-message-ttl` (30s) and its own
   `x-dead-letter-exchange`/`x-dead-letter-routing-key` pointing back at
-  the *existing* exchange/routing key, so once the TTL expires RabbitMQ
-  automatically redelivers it to the main queue — no polling or scheduler
-  needed.
+  the main exchange/routing key, so once the TTL expires RabbitMQ
+  automatically redelivers the message to the main queue for another
+  attempt — a passive delay buffer, no consumer attached.
 - Once attempts are exhausted, publish to a new `<queue>.failed` queue
   (a durable holding area for manual inspection — no consumer yet) and
   send a failure notification to `reply_to`, same as the existing
-  business-failure path.
+  business-failure path. This is the one routing decision RabbitMQ's
+  static per-queue DLX config can't express conditionally, so it's the
+  only case that still needs a manual `basic_publish`.
 - A message that fails to even parse as JSON goes straight to
-  `<queue>.failed` without burning retry attempts, since retrying
-  unparseable bytes can never succeed.
-- Attempt count is tracked with an **app-managed header**
-  (`x-veribroke-attempt`), not RabbitMQ's native `x-death`. Using
-  `x-death` would require setting `x-dead-letter-exchange` directly on
-  the *main* queue (`veribroke.mpesa-stk`) — but that queue already
-  exists in production without that argument, and RabbitMQ raises
-  `PRECONDITION_FAILED (406)` on redeclare with different arguments,
-  which would crash the consumer at startup against the real broker.
-  Routing everything through brand-new `.retry`/
-  `.failed` queues means the main queue's `queue_declare` call stays
-  byte-for-byte identical to today, so this ships with zero required
-  operational/migration step.
+  `<queue>.failed` without burning retry attempts (via the same manual
+  publish path), since retrying unparseable bytes can never succeed and
+  routing it through nack would just cycle it forever.
 - `print()` calls in this file were replaced with `logging` (module
   logger `rabbit.consumers`) as a low-cost side effect of touching this
   code; log formatting/handlers/correlation IDs are still tracked
   separately as the broader observability phase.
 
+This does require changing `veribroke.mpesa-stk`'s declared queue
+arguments, and that queue already exists in production without them —
+RabbitMQ raises `PRECONDITION_FAILED (406)` on redeclare with different
+arguments (confirmed against a real broker, see below), so **this
+requires an operational step**: the queue (or its exchange) must be
+deleted before this ships, so it gets recreated with the new arguments
+on first connect. Explicitly accepted as reasonable operational cost in
+exchange for not hand-rolling retry/attempt-tracking logic that
+RabbitMQ already provides natively.
+
 Verified two ways:
 - Unit tests (`rabbit/tests.py`, mocked channel) covering: success path
   unchanged, business-failure path unchanged, exception-with-attempts-
-  remaining requeues to `.retry`, exception-at-max-attempts goes to
-  `.failed` + notifies, malformed JSON skips straight to `.failed`.
-- A one-off smoke test against a real local RabbitMQ broker: (a)
-  pre-declared a queue with today's exact (bare) arguments to simulate
-  "already exists in production", then ran `ConsumerListener` against it
-  and confirmed no `PRECONDITION_FAILED`; (b) published a message that
-  fails once, confirmed it round-trips through `.retry` and is
-  redelivered to the main queue and succeeds. Not part of the committed
-  suite (needs a live broker) but confirms the broker-level behavior
-  mocks can't.
+  remaining nacks (not published) to trigger the DLX, exception-at-
+  max-attempts publishes to `.failed` + notifies, malformed JSON skips
+  straight to `.failed`.
+- A scripted run against a real local RabbitMQ broker: (a) pre-declared
+  the queue with today's exact (bare) arguments to simulate "already
+  exists in production"; (b) confirmed redeclaring it with the new DLX
+  arguments does raise `PRECONDITION_FAILED`, validating the operational
+  step above is real; (c) deleted and let `ConsumerListener` recreate it,
+  then published a message that fails once and confirmed it round-trips
+  through nack → DLX → `.retry` → TTL → redelivery → success on the main
+  queue. Not part of the committed suite (needs a live broker) but
+  confirms the broker-level behavior mocks can't.
 
 ## Consequences
 
@@ -89,9 +99,13 @@ Verified two ways:
   to 3 attempts and land in a `.failed` queue for manual triage, instead
   of retrying forever and blocking every other message behind them
   (`prefetch_count=1`).
-- No production RabbitMQ topology migration/downtime is required — the
-  main queue's declared arguments are untouched; only new queues are
-  added.
+- **Requires a production deploy step**: the `veribroke.mpesa-stk` queue
+  (or its exchange) must be deleted before/during this deploy so it gets
+  recreated with the new `x-dead-letter-*` arguments — deploying the code
+  without doing so will crash the consumer with `PRECONDITION_FAILED` on
+  startup. Deliberately accepted in exchange for simpler code (native
+  `x-death` counting instead of an app-managed header, one nack instead
+  of a manual publish for the common retry case).
 - New operational surface: `<queue>.failed` queues now exist and will
   silently accumulate messages with no consumer or alerting yet. This is
   a known, deliberate gap — building alerting/consumption for it is
