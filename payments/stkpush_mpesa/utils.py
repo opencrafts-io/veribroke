@@ -57,9 +57,14 @@ def make_mpesa_stk(body):
                         None, {}
 
                 trans.split = True
-                
+
                 if not account_reference:
                     account_reference = serializer.validated_data['request_id']
+
+                # split_trans.split_id is a non-deferrable FK to trans, so
+                # trans must already exist in the DB before this insert.
+                # reference_id stays null until the STK push responds.
+                trans.save()
 
                 split_trans = SplitTransactions(
                     originator="MPESASTKPUSH",
@@ -102,4 +107,15 @@ def make_mpesa_stk(body):
                 
                 return True, "Stk Sent Successfully", None, resp_data
             else:
+                if trans.split:
+                    # trans/split_trans were already persisted (pending)
+                    # to satisfy the FK above; don't leave them dangling.
+                    trans.status = "failure"
+                    trans.message = resp_data.get('errorMessage')
+                    trans.save()
+
+                    split_trans.status = "failedprocessing"
+                    split_trans.message = resp_data.get('errorMessage')
+                    split_trans.save()
+
                 return False, "Couldn't send stk push", resp_data['errorMessage'], resp_data
