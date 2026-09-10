@@ -37,6 +37,7 @@ class Transactions(models.Model):
     reference_id = models.CharField(
         max_length=350,
         unique=True,
+        null=True,
     )
     trans_code = models.CharField(
         max_length=350,
