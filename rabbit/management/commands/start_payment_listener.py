@@ -4,11 +4,17 @@ from payments.stkpush_mpesa.utils import make_mpesa_stk
 from rabbit.consumers import ConsumerListener
 from rabbit.rabbit_setup import RabbitSetup
 
+from typing import Any, Optional
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class Command(BaseCommand):
     help = "Start all registered RabbitMQ consumers"
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Optional[str]:
        # setup rabbit
        rabbit = RabbitSetup()
        rabbit.declare_default_exchanges()
@@ -25,7 +31,8 @@ class Command(BaseCommand):
 
        for consumer in ConsumerListener.Consumers.values():
            consumer.start()
-       
-       print("wiiih")
-        
- 
+
+       logger.info(
+           "all rabbitmq consumers started",
+           extra={"queues": list(ConsumerListener.Consumers.keys())},
+       )

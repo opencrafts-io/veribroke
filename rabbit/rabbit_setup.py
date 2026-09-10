@@ -1,11 +1,13 @@
 from retry import retry
 from veribroke import settings
 
+from pika.adapters.blocking_connection import BlockingChannel
+
 import pika
 
 
 class RabbitSetup():
-    def __init__(self):
+    def __init__(self) -> None:
         creds = pika.PlainCredentials(
             settings.env("RABBITMQ_USER"),
             settings.env("RABBITMQ_PASSWORD"),
@@ -17,9 +19,9 @@ class RabbitSetup():
                 credentials=creds,
             ),
         )
-        self.channel = connection.channel()
-        
-    def declare_default_exchanges(self):
+        self.channel: BlockingChannel = connection.channel()
+
+    def declare_default_exchanges(self) -> None:
         """
         Used to declare the default exchanges for the app
         """
@@ -36,7 +38,13 @@ class RabbitSetup():
             exchange_type='topic',
         )
     
-    def publish_message(self, exchange, routing_key, body, persist):
+    def publish_message(
+            self,
+            exchange: str,
+            routing_key: str,
+            body: str | bytes,
+            persist: bool,
+        ) -> None:
         """
         Will Publish Message To RabbitMQ
 
@@ -54,8 +62,8 @@ class RabbitSetup():
                 delivery_mode=delivery_mode,
             )
         )
-    
-    def close(self):
+
+    def close(self) -> None:
         """
         Used to close the connection for rabbitmq
         """

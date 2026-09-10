@@ -1,11 +1,14 @@
 import time
 import math
 import base64
+import logging
 import requests
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from uuid import uuid4
 from veribroke import settings
+
+logger = logging.getLogger(__name__)
 
 
 class MpesaHandler:
@@ -44,9 +47,8 @@ class MpesaHandler:
             else:
                 self.access_token_expiration = time.time() + 3599
 
-        except Exception as e:
-            # TODO log this error
-            print(str(e))
+        except Exception:
+            logger.exception("failed to initialize mpesa access token")
 
     def get_mpesa_access_token(self):
         try:
@@ -56,16 +58,19 @@ class MpesaHandler:
                 self.access_token_url,
                 auth=HTTPBasicAuth(self.consumer_key, self.consumer_secret),
             )
-            
+
             token = res.json()['access_token']
 
             self.headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json"
             }
-        except Exception as e:
-            print(str(e), "error getting access token")
-            raise e
+        except Exception:
+            logger.exception(
+                "failed to fetch mpesa access token",
+                extra={"url": self.access_token_url},
+            )
+            raise
 
         return token
 
@@ -95,6 +100,14 @@ class MpesaHandler:
             "TransactionDesc": "Client Deposit",
         }
 
+        logger.info(
+            "sending stk push",
+            extra={
+                "account_reference": push_data["AccountReference"],
+                "amount": push_data["Amount"],
+            },
+        )
+
         response = requests.post(
             self.stk_push_url,
             json=push_data,
@@ -102,6 +115,17 @@ class MpesaHandler:
         )
 
         response_data = response.json()
+
+        logger.info(
+            "stk push response received",
+            extra={
+                "account_reference": push_data["AccountReference"],
+                "status_code": response.status_code,
+                "response_code": response_data.get("ResponseCode"),
+                "checkout_request_id": response_data.get("CheckoutRequestID"),
+                "error_message": response_data.get("errorMessage"),
+            },
+        )
 
         return response.status_code, response_data
 
@@ -113,14 +137,28 @@ class MpesaHandler:
             "CheckoutRequestID": checkout_request_id
         }
 
+        logger.info(
+            "querying stk push status",
+            extra={"checkout_request_id": checkout_request_id},
+        )
+
         response = requests.post(
             self.query_status_url,
             json=query_data,
             headers=self.headers
         )
-        
+
         response_data = response.json()
-        
+
+        logger.info(
+            "stk push status response received",
+            extra={
+                "checkout_request_id": checkout_request_id,
+                "status_code": response.status_code,
+                "response_code": response_data.get("ResponseCode"),
+            },
+        )
+
         return response.status_code, response_data
     
     def send_to_user(self, is_pochi, amount, recipient, remarks, occasion):
@@ -146,17 +184,38 @@ class MpesaHandler:
 
         request_url = settings.env("SAF_POCHI_URL") if is_pochi\
             else settings.env("SAF_B2C_URL")
-        
+
+        logger.info(
+            "sending b2c disbursement",
+            extra={
+                "command_id": command_id,
+                "amount": query_data["Amount"],
+                "recipient": recipient,
+                "originator_conversation_id": query_data["OriginatorConversationID"],
+            },
+        )
+
         response = requests.post(
             request_url,
             json=query_data,
             headers=self.headers
         )
-        
+
         response_data = response.json()
-        
+
+        logger.info(
+            "b2c disbursement response received",
+            extra={
+                "command_id": command_id,
+                "originator_conversation_id": query_data["OriginatorConversationID"],
+                "status_code": response.status_code,
+                "response_code": response_data.get("ResponseCode"),
+                "error_message": response_data.get("errorMessage"),
+            },
+        )
+
         return response.status_code, response_data
-    
+
     def send_to_business(
             self,
             is_paybill,
@@ -186,12 +245,32 @@ class MpesaHandler:
             "ResultURL": settings.env("SAF_B2B_URL"),
         }
 
+        logger.info(
+            "sending b2b disbursement",
+            extra={
+                "command_id": command_id,
+                "amount": query_data["Amount"],
+                "recipient": recipient,
+                "account_reference": account_reference,
+            },
+        )
+
         response = requests.post(
             "https://sandbox.safaricom.co.ke/mpesa/b2b/v1/paymentrequest",
             json=query_data,
             headers=self.headers
         )
-        
+
         response_data = response.json()
-        
+
+        logger.info(
+            "b2b disbursement response received",
+            extra={
+                "command_id": command_id,
+                "status_code": response.status_code,
+                "response_code": response_data.get("ResponseCode"),
+                "error_message": response_data.get("errorMessage"),
+            },
+        )
+
         return response.status_code, response_data

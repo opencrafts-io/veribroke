@@ -21,9 +21,12 @@ class Transactions(models.Model):
         primary_key=True,
         editable=False,
     )
+    # Caller-owned reference, opaque to Veribroke -- never read by our
+    # own logic. Optional; see ADR 0003.
     target_user_id = models.CharField(
         max_length=350,
-        null=False,
+        null=True,
+        blank=True,
     )
     trans_amount = models.DecimalField(
         max_digits=12,
@@ -37,6 +40,7 @@ class Transactions(models.Model):
     reference_id = models.CharField(
         max_length=350,
         unique=True,
+        null=True,
     )
     trans_code = models.CharField(
         max_length=350,
