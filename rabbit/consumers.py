@@ -26,7 +26,7 @@ RETRY_TTL_MS = 30000
 
 
 class ConsumerListener(threading.Thread):
-    Consumers: dict[str, ConsumerListener] = dict()
+    Consumers: dict[str, "ConsumerListener"] = dict()
 
     def __init__(
         self,
